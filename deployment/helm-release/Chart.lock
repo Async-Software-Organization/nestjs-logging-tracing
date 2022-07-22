@@ -1,0 +1,9 @@
+dependencies:
+- name: loki-stack
+  repository: https://grafana.github.io/helm-charts
+  version: 2.6.5
+- name: jaeger
+  repository: https://jaegertracing.github.io/helm-charts
+  version: 0.57.1
+digest: sha256:4dd1f1c0acbd8bbc4b1d003ff32f755d741daeac065dac74eebed3026c1cc704
+generated: "2022-07-21T23:14:05.569343+02:00"

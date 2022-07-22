@@ -1,0 +1,151 @@
+# For canary testing you need to duplicate this deployment configuration file
+# and change "stable" to "canary" and add another repository version number
+# after that helm will deploy this environment too
+# so, 2 pods are running in the cluster. 50% with version 1 and the other 50% with version 2
+# track: canary
+# rel: canary
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ include "app.fullname" . }}
+    rel: stable
+    phase: dev
+    deployment: v1
+  annotations:
+    "sidecar.jaegertracing.io/inject": "true"
+spec:
+  strategy:
+    type: RollingUpdate
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  minReadySeconds: 10
+  selector:
+    matchLabels:
+      app: {{ include "app.fullname" . }}
+      track: stable
+  template:
+    metadata:
+      labels:
+        app: {{ include "app.fullname" . }}
+        rel: stable
+        track: stable
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/api/metrics"
+    spec:
+      containers:
+        - name: frontend
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: Always
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  key: NODE_ENV
+                  name: {{ include "app.fullname" . }}-config
+            - name: DEBUG
+              valueFrom:
+                configMapKeyRef:
+                  key: DEBUG
+                  name: {{ include "app.fullname" . }}-config
+            - name: PLAYGROUND
+              valueFrom:
+                configMapKeyRef:
+                  key: PLAYGROUND
+                  name: {{ include "app.fullname" . }}-config
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  key: API_PORT
+                  name: {{ include "app.fullname" . }}-config
+            - name: HTTP_TIMEOUT
+              valueFrom:
+                configMapKeyRef:
+                  key: HTTP_TIMEOUT
+                  name: {{ include "app.fullname" . }}-config
+            - name: HTTP_MAX_REDIRECTS
+              valueFrom:
+                configMapKeyRef:
+                  key: HTTP_MAX_REDIRECTS
+                  name: {{ include "app.fullname" . }}-config
+            - name: API_GLOBAL_PREFIX
+              valueFrom:
+                configMapKeyRef:
+                  key: API_GLOBAL_PREFIX
+                  name: {{ include "app.fullname" . }}-config
+            - name: API_TITLE
+              valueFrom:
+                configMapKeyRef:
+                  key: API_TITLE
+                  name: {{ include "app.fullname" . }}-config
+            - name: API_PREFIX
+              valueFrom:
+                configMapKeyRef:
+                  key: API_PREFIX
+                  name: {{ include "app.fullname" . }}-config
+            - name: API_DB_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: API_DB_URL
+                  name: {{ include "app.fullname" . }}-config
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              scheme: HTTP
+              path: "/api/health"
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 2
+          readinessProbe:
+            httpGet:
+              scheme: HTTP
+              path: "/api/readiness"
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 1
+        - env:
+          - name: REPORTER_GRPC_HOST_PORT
+            value: app-jaeger-collector:14250
+          image: jaegertracing/jaeger-agent:1.36.0
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /
+              port: admin
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: app-jaeger-agent-sidecar
+          ports:
+            - containerPort: 14271
+              name: admin
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /
+              port: admin
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          resources: { }
+          securityContext: { }
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+      imagePullSecrets:
+        - name: registry-async-registry-hub
+      restartPolicy: Always
